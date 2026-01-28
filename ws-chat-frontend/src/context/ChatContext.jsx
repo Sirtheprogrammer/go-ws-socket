@@ -7,7 +7,7 @@ const initialState = {
   channels: ['general', 'random', 'announcements'],
   currentChannel: 'general',
   messages: {},
-  activeUsers: new Map(),
+  activeUsers: [],
   typingUsers: new Set(),
   dmUsers: [],
   notifications: [],

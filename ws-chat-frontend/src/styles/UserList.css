@@ -12,7 +12,7 @@
   flex-direction: column;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
   animation: slideInRight 0.3s ease;
-  z-index: 90;
+  z-index: 1005;
 }
 
 @keyframes slideInRight {
@@ -20,6 +20,7 @@
     transform: translateX(100%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;
@@ -164,6 +165,7 @@
 
   .user-list-header {
     padding: 0.5rem;
+    flex-direction: row-reverse;
   }
 
   .user-list-header h3 {
