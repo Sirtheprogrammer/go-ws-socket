@@ -1,0 +1,125 @@
+/* Message Input Styling */
+
+.message-input {
+  padding: 1rem;
+  background-color: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.input-wrapper {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.input-field {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 1.5rem;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  max-height: 100px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-field:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(0, 132, 255, 0.1);
+}
+
+.input-field:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.input-field::placeholder {
+  color: var(--text-secondary);
+}
+
+.send-button {
+  padding: 0.75rem 1.5rem;
+  background-color: var(--primary-color);
+  color: white;
+  border-radius: 1.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.send-button:hover:not(:disabled) {
+  background-color: var(--primary-hover);
+  transform: scale(1.05);
+}
+
+.send-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.connection-warning {
+  padding: 0.5rem 1rem;
+  background-color: rgba(240, 40, 73, 0.1);
+  color: var(--error-color);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .message-input {
+    padding: 0.75rem;
+  }
+
+  .input-wrapper {
+    gap: 0.5rem;
+  }
+
+  .input-field {
+    padding: 0.6rem 0.9rem;
+    font-size: 0.9rem;
+    border-radius: 1rem;
+  }
+
+  .send-button {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.85rem;
+    border-radius: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .message-input {
+    padding: 0.5rem;
+  }
+
+  .input-wrapper {
+    gap: 0.25rem;
+  }
+
+  .input-field {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  .send-button {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+  }
+
+  .connection-warning {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.8rem;
+  }
+}

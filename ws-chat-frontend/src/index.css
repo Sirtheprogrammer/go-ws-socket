@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
+    'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #fff;
+  color: #000;
+}
+
+:root {
+  --primary-color: #0084ff;
+  --secondary-color: #e4e6eb;
+  --dark-bg: #fff;
+  --dark-text: #000;
+  --dark-border: #e5e5e5;
+  --sidebar-bg: #f0f2f5;
+  --message-bg: #e7f3ff;
+  --other-message-bg: #e4e6eb;
+  --hover-bg: #f2f2f2;
+  --success-color: #31a24c;
+  --error-color: #e74c3c;
+  --warning-color: #f39c12;
+  --info-color: #3498db;
+}
+
+body.dark-theme {
+  --primary-color: #0084ff;
+  --secondary-color: #2a2a2a;
+  --dark-bg: #1a1a1a;
+  --dark-text: #fff;
+  --dark-border: #333;
+  --sidebar-bg: #242526;
+  --message-bg: #0a66c2;
+  --other-message-bg: #303031;
+  --hover-bg: #3a3a3a;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark-theme ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+.dark-theme ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
