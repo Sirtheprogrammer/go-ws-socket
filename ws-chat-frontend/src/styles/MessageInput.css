@@ -123,3 +123,68 @@
     padding: 0.4rem 0.8rem;
   }
 }
+
+/* Reply Preview - WhatsApp Style */
+.reply-preview {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  padding: 0;
+  background: var(--bg-secondary);
+  border-radius: 0.75rem;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.reply-preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 4px solid #25D366;
+  background: rgba(37, 211, 102, 0.08);
+}
+
+.reply-preview-icon {
+  display: none;
+}
+
+.reply-preview-label {
+  display: none;
+}
+
+.reply-preview-sender {
+  font-weight: 600;
+  color: #25D366;
+  font-size: 0.8rem;
+}
+
+.reply-preview-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.reply-cancel-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.reply-cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}

@@ -26,6 +26,7 @@ const (
 	MessageTypeUserLeft   MessageType = "system:user_left"
 	MessageTypeTyping     MessageType = "system:typing"
 	MessageTypePresence   MessageType = "system:presence"
+	MessageTypeMessageDelete MessageType = "message:delete"
 
 	// Acknowledgment
 	MessageTypeAck MessageType = "ack"

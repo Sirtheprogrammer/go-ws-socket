@@ -63,6 +63,7 @@ func main() {
 	server.RegisterHandler(MessageTypeTyping, TypingHandler)
 	server.RegisterHandler(MessageTypePresence, PresenceHandler)
 	server.RegisterHandler(MessageTypeAck, AckHandler)
+	server.RegisterHandler(MessageTypeMessageDelete, DeleteMessageHandler)
 
 	// Register hooks
 	server.RegisterBeforeMessageHook(DefaultBeforeHook)

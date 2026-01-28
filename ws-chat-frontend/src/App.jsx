@@ -18,6 +18,7 @@ function App() {
     currentChannel,
     messages,
     addMessage,
+    removeMessage,
     setChannelMessages,
     updateActiveUsers,
     setTypingUsers,
@@ -109,6 +110,7 @@ function App() {
             content: payload?.content || payload,
             timestamp,
             type: 'message',
+            replyTo: payload?.replyTo || undefined,
           };
           // Reducer handles duplicate prevention
           addMessage(channel, msgData);
@@ -122,6 +124,7 @@ function App() {
               content: payload?.content || payload,
               timestamp,
               type: message.type,
+              replyTo: payload?.replyTo || undefined,
             }).catch(err => console.error('Error saving to IndexedDB:', err));
           }
 
@@ -149,6 +152,7 @@ function App() {
             content: payload?.content || payload,
             timestamp,
             type: 'message',
+            replyTo: payload?.replyTo || undefined,
           };
           // Reducer handles duplicate prevention
           addMessage(dmKey, msgData);
@@ -307,10 +311,32 @@ function App() {
         });
         break;
 
+      case 'message:delete':
+        if (payload?.message_id) {
+          const messageId = payload.message_id;
+          const deleteChannel = channel || (sender ? `dm_${sender}` : currentChannel);
+
+          // Remove from local state
+          removeMessage(deleteChannel, messageId);
+
+          // Delete from IndexedDB
+          if (dbInitialized) {
+            indexedDBService.deleteMessageFromIndexedDB(messageId)
+              .catch(err => console.error('Error deleting from IndexedDB:', err));
+          }
+
+          // Delete from PostgreSQL
+          if (postgresConnected) {
+            postgresService.deleteMessageFromPostgres(messageId)
+              .catch(err => console.error('Error deleting from PostgreSQL:', err));
+          }
+        }
+        break;
+
       default:
         console.log('Unknown message type:', type);
     }
-  }, [userId, addMessage, addDmUser, addNotification, updateActiveUsers, setTypingUsers, setChannelMessages, dbInitialized, postgresConnected]);
+  }, [userId, addMessage, removeMessage, addDmUser, addNotification, updateActiveUsers, setTypingUsers, setChannelMessages, dbInitialized, postgresConnected]);
 
   const { send, isConnected: wsConnected } = useWebSocket(
     userId,
@@ -324,6 +350,26 @@ function App() {
       setConnected(false);
     }
   );
+
+  // Handle message deletion (must be after useWebSocket to access 'send')
+  const handleDeleteMessage = useCallback((messageId) => {
+    if (!userId || !isConnected) {
+      console.warn('Cannot delete message: not connected');
+      return;
+    }
+
+    const deleteMsg = {
+      type: 'message:delete',
+      sender: userId,
+      channel: currentChannel && !currentChannel.startsWith('dm_') ? currentChannel : undefined,
+      recipient: currentChannel && currentChannel.startsWith('dm_') ? currentChannel.replace('dm_', '') : undefined,
+      payload: { message_id: messageId },
+      timestamp: Date.now(),
+      id: `del_${Date.now()}`,
+    };
+
+    send(deleteMsg);
+  }, [userId, isConnected, currentChannel, send]);
 
   // Load messages from PostgreSQL when channel changes
   useEffect(() => {
@@ -427,7 +473,7 @@ function App() {
           onToggle={() => setSidebarOpen(!sidebarOpen)}
           onSendMessage={send}
         />
-        <ChatWindow onSendMessage={send} />
+        <ChatWindow onSendMessage={send} onDeleteMessage={handleDeleteMessage} />
       </div>
       <NotificationPanel />
     </div>

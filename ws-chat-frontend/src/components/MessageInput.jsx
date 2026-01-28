@@ -8,7 +8,15 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
-  const { settings, addMessage } = useChat();
+  const inputRef = useRef(null);
+  const { settings, addMessage, replyingTo, clearReplyingTo } = useChat();
+
+  // Focus input when replying
+  useEffect(() => {
+    if (replyingTo) {
+      inputRef.current?.focus();
+    }
+  }, [replyingTo]);
 
   const handleSendMessage = async () => {
     if (!message.trim() || !isConnected || !userId) {
@@ -24,57 +32,69 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
     const msg = {
       type: msgType,
       sender: userId,
-      payload: { content: messageContent },
+      payload: {
+        content: messageContent,
+        ...(replyingTo && {
+          replyTo: {
+            id: replyingTo.id,
+            sender: replyingTo.sender,
+            content: replyingTo.content,
+          }
+        })
+      },
       timestamp: Date.now(),
       id: messageId,
     };
 
-    // Add channel or recipient based on message type
     if (isDirectMessage) {
       msg.recipient = recipientId;
     } else {
       msg.channel = channel;
     }
 
-    // Save to IndexedDB immediately (local cache)
     try {
-      await indexedDBService.saveMessageToIndexedDB({
+      const messageData = {
         id: messageId,
         sender: userId,
-        channel: channel.startsWith('dm_') ? channel : channel,
+        channel: channel,
         content: messageContent,
         timestamp: Date.now(),
         type: msgType,
-        recipient: channel.startsWith('dm_') ? channel.replace('dm_', '') : undefined,
-      });
+        recipient: isDirectMessage ? recipientId : undefined,
+        replyTo: replyingTo ? {
+          id: replyingTo.id,
+          sender: replyingTo.sender,
+          content: replyingTo.content,
+        } : undefined,
+      };
 
-      // Also add to local state immediately
+      await indexedDBService.saveMessageToIndexedDB(messageData);
+
       addMessage(channel, {
         id: messageId,
         sender: userId,
         content: messageContent,
         timestamp: Date.now(),
         type: 'message',
+        replyTo: replyingTo ? {
+          id: replyingTo.id,
+          sender: replyingTo.sender,
+          content: replyingTo.content,
+        } : undefined,
       });
 
-      // Save to PostgreSQL (async, don't block UI)
-      postgresService.saveMessageToPostgres({
-        id: messageId,
-        sender: userId,
-        channel: channel.startsWith('dm_') ? channel : channel,
-        content: messageContent,
-        timestamp: Date.now(),
-        type: msgType,
-        recipient: channel.startsWith('dm_') ? channel.replace('dm_', '') : undefined,
-      }).catch(err => console.error('Error saving to PostgreSQL:', err));
+      postgresService.saveMessageToPostgres(messageData)
+        .catch(err => console.error('Error saving to PostgreSQL:', err));
     } catch (error) {
-      console.error('Error saving message to IndexedDB:', error);
+      console.error('Error saving message:', error);
     }
 
-    // Send via WebSocket
     onSendMessage(msg);
     setMessage('');
     setIsTyping(false);
+    if (replyingTo) {
+      clearReplyingTo();
+    }
   };
 
   const handleInputChange = (e) => {
@@ -82,8 +102,6 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
 
     if (!isTyping && settings.showTypingIndicators) {
       setIsTyping(true);
-      // For DMs, send typing indicator to the recipient directly
-      // For channels, broadcast to the channel
       const isDirectMessage = channel.startsWith('dm_');
       onSendMessage({
         type: 'system:typing',
@@ -95,7 +113,6 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
       });
     }
 
-    // Reset typing indicator after 3 seconds
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
@@ -122,12 +139,30 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
 
   return (
     <div className="message-input">
+      {/* Reply Preview */}
+      {replyingTo && (
+        <div className="reply-preview">
+          <div className="reply-preview-content">
+            <span className="reply-preview-icon">↩</span>
+            <span className="reply-preview-label">Replying to</span>
+            <span className="reply-preview-sender">{replyingTo.sender}</span>
+            <span className="reply-preview-text">
+              {replyingTo.content?.substring(0, 60)}{replyingTo.content?.length > 60 ? '...' : ''}
+            </span>
+          </div>
+          <button className="reply-cancel-btn" onClick={clearReplyingTo} title="Cancel reply">
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="input-wrapper">
         <textarea
+          ref={inputRef}
           value={message}
           onChange={handleInputChange}
           onKeyPress={handleKeyPress}
-          placeholder={isConnected ? 'Type a message...' : 'Connecting...'}
+          placeholder={replyingTo ? `Reply to ${replyingTo.sender}...` : (isConnected ? 'Type a message...' : 'Connecting...')}
           disabled={!isConnected}
           rows="1"
           className="input-field"

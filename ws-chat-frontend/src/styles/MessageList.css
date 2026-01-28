@@ -42,6 +42,7 @@
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -166,4 +167,162 @@
   .message-time {
     font-size: 0.7rem;
   }
+}
+
+/* Delete Button Styling */
+.message-bubble {
+  position: relative;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background-color: var(--message-bg-other);
+  color: var(--text-primary);
+  word-wrap: break-word;
+  word-break: break-word;
+  line-height: 1.4;
+  font-size: 0.95rem;
+}
+
+.message-bubble.own {
+  padding-right: 2.5rem;
+  /* Make room for delete button */
+}
+
+.message-delete-btn {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.25rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.message-bubble:hover .message-delete-btn {
+  opacity: 1;
+}
+
+.message-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.message-delete-btn svg {
+  display: block;
+}
+
+/* Reply Context in Messages - WhatsApp Style */
+.reply-context {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.35rem;
+  background: rgba(0, 0, 0, 0.06);
+  border-left: 4px solid #25D366;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+[data-theme="dark"] .reply-context,
+.dark .reply-context {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.reply-context:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .reply-context:hover,
+.dark .reply-context:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.reply-icon {
+  display: none;
+}
+
+.reply-sender {
+  font-weight: 600;
+  color: #25D366;
+  font-size: 0.75rem;
+  margin-bottom: 0.15rem;
+}
+
+.message-group.own .reply-sender {
+  color: #34B7F1;
+}
+
+.reply-preview {
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  max-width: 200px;
+}
+
+/* Message text inside bubble */
+.message-text {
+  word-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Message Action Buttons */
+.message-actions {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.message-bubble:hover .message-actions {
+  opacity: 1;
+}
+
+.message-action-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.message-action-btn.reply-btn:hover {
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--primary-color);
+}
+
+.message-action-btn.delete-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.message-action-btn svg {
+  display: block;
+}
+
+/* Adjust message bubble for action buttons */
+.message-bubble {
+  position: relative;
+  padding-right: 3.5rem;
 }

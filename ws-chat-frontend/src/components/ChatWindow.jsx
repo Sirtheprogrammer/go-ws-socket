@@ -6,7 +6,7 @@ import UserList from './UserList';
 import TypingIndicator from './TypingIndicator';
 import '../styles/ChatWindow.css';
 
-function ChatWindow({ onSendMessage }) {
+function ChatWindow({ onSendMessage, onDeleteMessage }) {
   const {
     userId,
     currentChannel,
@@ -27,8 +27,8 @@ function ChatWindow({ onSendMessage }) {
 
   const filteredMessages = searchQuery
     ? channelMessages.filter((msg) =>
-        msg.content?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      msg.content?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : channelMessages;
 
   return (
@@ -130,7 +130,7 @@ function ChatWindow({ onSendMessage }) {
             <p>Try different search terms</p>
           </div>
         ) : (
-          <MessageList messages={filteredMessages} userId={userId} />
+          <MessageList messages={filteredMessages} userId={userId} onDeleteMessage={onDeleteMessage} />
         )}
       </div>
 

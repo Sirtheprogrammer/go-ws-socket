@@ -11,6 +11,7 @@ const initialState = {
   typingUsers: new Set(),
   dmUsers: [],
   notifications: [],
+  replyingTo: null, // { id, sender, content, channel } - message being replied to
   isConnected: false,
   isDarkTheme: localStorage.getItem('darkTheme') === 'true',
   settings: {
@@ -56,6 +57,18 @@ const chatReducer = (state, action) => {
           [channelId]: channelMessages,
         },
       };
+
+    case 'REMOVE_MESSAGE': {
+      const { channel, messageId } = action.payload;
+      const channelMessages = state.messages[channel] || [];
+      return {
+        ...state,
+        messages: {
+          ...state.messages,
+          [channel]: channelMessages.filter((msg) => msg.id !== messageId),
+        },
+      };
+    }
 
     case 'SET_MESSAGES':
       return { ...state, messages: action.payload };
@@ -104,6 +117,12 @@ const chatReducer = (state, action) => {
     case 'UPDATE_SETTINGS':
       return { ...state, settings: { ...state.settings, ...action.payload } };
 
+    case 'SET_REPLYING_TO':
+      return { ...state, replyingTo: action.payload };
+
+    case 'CLEAR_REPLYING_TO':
+      return { ...state, replyingTo: null };
+
     default:
       return state;
   }
@@ -127,6 +146,10 @@ export const ChatProvider = ({ children }) => {
 
   const addMessage = useCallback((channel, message) => {
     dispatch({ type: 'ADD_MESSAGE', payload: { channel, message } });
+  }, []);
+
+  const removeMessage = useCallback((channel, messageId) => {
+    dispatch({ type: 'REMOVE_MESSAGE', payload: { channel, messageId } });
   }, []);
 
   const setChannelMessages = useCallback((channelId, messages) => {
@@ -161,12 +184,21 @@ export const ChatProvider = ({ children }) => {
     dispatch({ type: 'UPDATE_SETTINGS', payload: settings });
   }, []);
 
+  const setReplyingTo = useCallback((message) => {
+    dispatch({ type: 'SET_REPLYING_TO', payload: message });
+  }, []);
+
+  const clearReplyingTo = useCallback(() => {
+    dispatch({ type: 'CLEAR_REPLYING_TO' });
+  }, []);
+
   const value = {
     ...state,
     setUserId,
     setConnected,
     setCurrentChannel,
     addMessage,
+    removeMessage,
     setChannelMessages,
     updateActiveUsers,
     setTypingUsers,
@@ -175,6 +207,8 @@ export const ChatProvider = ({ children }) => {
     removeNotification,
     toggleTheme,
     updateSettings,
+    setReplyingTo,
+    clearReplyingTo,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

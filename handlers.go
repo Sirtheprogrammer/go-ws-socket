@@ -189,3 +189,53 @@ func OnDisconnect(conn *Connection) error {
 	log.Printf("Client disconnected: ID=%s, UserID=%s", conn.ID, conn.UserID)
 	return nil
 }
+
+// DeleteMessageHandler handles message deletion requests
+func DeleteMessageHandler(conn *Connection, msg *Message) error {
+	if msg.Payload == nil {
+		return fmt.Errorf("payload is required for delete messages")
+	}
+
+	messageID, ok := msg.Payload["message_id"].(string)
+	if !ok || messageID == "" {
+		return fmt.Errorf("message_id is required in payload")
+	}
+
+	log.Printf("Delete request from %s for message %s", msg.Sender, messageID)
+
+	// Delete from database first
+	if globalDB != nil {
+		if err := globalDB.DeleteMessage(messageID); err != nil {
+			log.Printf("Error deleting message from database: %v", err)
+			// Continue to broadcast even if DB delete fails
+		} else {
+			log.Printf("Message %s deleted from database", messageID)
+		}
+	}
+
+	// Broadcast delete event to all users in the channel/DM
+	deleteNotification := &Message{
+		ID:        generateMessageID(),
+		Type:      MessageTypeMessageDelete,
+		Sender:    msg.Sender,
+		Channel:   msg.Channel,
+		Recipient: msg.Recipient,
+		Timestamp: msg.Timestamp,
+		Payload: map[string]interface{}{
+			"message_id": messageID,
+		},
+	}
+
+	// Route to channel or DM
+	if msg.Recipient != "" {
+		// Send to both sender and recipient for DMs
+		globalServer.sendToUser(msg.Recipient, deleteNotification)
+		globalServer.sendToUser(msg.Sender, deleteNotification)
+	} else if msg.Channel != "" {
+		// Broadcast to channel (including sender)
+		globalServer.broadcastToChannel(msg.Channel, deleteNotification, &BroadcastOptions{})
+	}
+
+	log.Printf("Delete notification sent for message %s", messageID)
+	return nil
+}

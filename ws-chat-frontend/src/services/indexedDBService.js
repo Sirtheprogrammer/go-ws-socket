@@ -190,6 +190,26 @@ export const getMessageCountForChannel = async (channelId) => {
   });
 };
 
+// Delete a specific message from IndexedDB
+export const deleteMessageFromIndexedDB = async (messageId) => {
+  if (!db) {
+    console.warn('IndexedDB not initialized');
+    return;
+  }
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([STORE_NAME], 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.delete(messageId);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      console.log(`✅ Message ${messageId} deleted from IndexedDB`);
+      resolve();
+    };
+  });
+};
+
 // Clear all data from IndexedDB
 export const clearAllIndexedDB = async () => {
   if (!db) {
@@ -216,6 +236,7 @@ export default {
   getChannelMessagesFromIndexedDB,
   getDMMessagesFromIndexedDB,
   clearChannelMessagesFromIndexedDB,
+  deleteMessageFromIndexedDB,
   saveChannelToIndexedDB,
   getMessageCountForChannel,
   clearAllIndexedDB,
