@@ -44,13 +44,13 @@ function App() {
         setDbInitialized(true);
         console.log('✅ IndexedDB initialized');
 
-        // Initialize PostgreSQL
+        // Initialize PostgreSQL API
         try {
           await postgresService.initPostgres();
           setPostgresConnected(true);
-          console.log('✅ PostgreSQL initialized');
+          console.log('✅ PostgreSQL API initialized');
         } catch (pgError) {
-          console.warn('⚠️ PostgreSQL connection failed, using IndexedDB only:', pgError.message);
+          console.warn('⚠️ PostgreSQL API connection failed, using IndexedDB only:', pgError.message);
           setPostgresConnected(false);
         }
       } catch (error) {
@@ -60,10 +60,8 @@ function App() {
 
     initializeDatabases();
 
-    // Cleanup on unmount
-    return () => {
-      postgresService.closePostgresConnection();
-    };
+    // No cleanup needed - REST API doesn't maintain direct connection
+    return () => { };
   }, []);
 
   // Update typing users when channel changes
@@ -99,9 +97,9 @@ function App() {
             timestamp,
             type: 'message',
           };
-          
+          // Reducer handles duplicate prevention
           addMessage(channel, msgData);
-          
+
           // Save to IndexedDB for local caching
           if (dbInitialized) {
             indexedDBService.saveMessageToIndexedDB({
@@ -113,7 +111,7 @@ function App() {
               type: message.type,
             }).catch(err => console.error('Error saving to IndexedDB:', err));
           }
-          
+
           // Save to PostgreSQL for global storage (async, don't block UI)
           if (postgresConnected) {
             postgresService.saveMessageToPostgres({
@@ -139,9 +137,9 @@ function App() {
             timestamp,
             type: 'message',
           };
-          
+          // Reducer handles duplicate prevention
           addMessage(dmKey, msgData);
-          
+
           // Save to IndexedDB for local caching
           if (dbInitialized) {
             indexedDBService.saveMessageToIndexedDB({
@@ -154,7 +152,7 @@ function App() {
               recipient: sender,
             }).catch(err => console.error('Error saving DM to IndexedDB:', err));
           }
-          
+
           // Save to PostgreSQL for global storage
           if (postgresConnected) {
             postgresService.saveMessageToPostgres({
@@ -176,31 +174,25 @@ function App() {
           setTypingUsersState((prev) => {
             const channelTyping = new Set(prev[channel] || []);
             channelTyping.add(sender);
-            
-            // Update context
-            setTypingUsers(channelTyping);
-            
+
             return {
               ...prev,
               [channel]: channelTyping,
             };
           });
-          
+
           // Clear existing timeout for this user
           const timeoutKey = `${channel}:${sender}`;
           if (typingTimeoutsRef.current[timeoutKey]) {
             clearTimeout(typingTimeoutsRef.current[timeoutKey]);
           }
-          
+
           // Set new timeout to clear typing indicator
           typingTimeoutsRef.current[timeoutKey] = setTimeout(() => {
             setTypingUsersState((prev) => {
               const channelTyping = new Set(prev[channel] || []);
               channelTyping.delete(sender);
-              
-              // Update context
-              setTypingUsers(channelTyping);
-              
+
               return {
                 ...prev,
                 [channel]: channelTyping,
@@ -228,16 +220,12 @@ function App() {
             timestamp: msg.timestamp || msg.Timestamp,
             type: 'message',
           }));
-          
-          // Deduplicate with any existing messages
-          const existingMessages = messages[channel] || [];
-          const existingIds = new Set(existingMessages.map(m => m.id));
-          const newMessages = historyMessages.filter(msg => !existingIds.has(msg.id));
-          
-          // Combine: existing messages + new history messages (sorted by timestamp)
-          const allMessages = [...historyMessages, ...newMessages].sort((a, b) => a.timestamp - b.timestamp);
-          const deduped = Array.from(new Map(allMessages.map(m => [m.id, m])).values());
-          
+
+          // Deduplicate by ID and sort by timestamp
+          const deduped = Array.from(
+            new Map(historyMessages.map((m) => [m.id, m])).values()
+          ).sort((a, b) => a.timestamp - b.timestamp);
+
           // Save all history messages to IndexedDB
           if (dbInitialized) {
             Promise.all(
@@ -253,7 +241,7 @@ function App() {
               )
             ).catch(err => console.error('Error saving history to IndexedDB:', err));
           }
-          
+
           // Defer state update to next event loop to avoid updating parent during render
           setTimeout(() => {
             setChannelMessages(channel, deduped);
@@ -283,7 +271,7 @@ function App() {
       default:
         console.log('Unknown message type:', type);
     }
-  }, [userId, messages, addMessage, addDmUser, addNotification, updateActiveUsers, setTypingUsers, setChannelMessages, dbInitialized, postgresConnected]);
+  }, [userId, addMessage, addDmUser, addNotification, updateActiveUsers, setTypingUsers, setChannelMessages, dbInitialized, postgresConnected]);
 
   const { send, isConnected: wsConnected } = useWebSocket(
     userId,
@@ -304,7 +292,7 @@ function App() {
       const loadPostgresMessages = async () => {
         try {
           let pgMessages = [];
-          
+
           if (currentChannel.startsWith('dm_')) {
             // Load DM messages
             const otherUserId = currentChannel.replace('dm_', '');
@@ -323,38 +311,32 @@ function App() {
               type: 'message',
             }));
 
-            // Deduplicate with existing messages
-            const existingMessages = messages[currentChannel] || [];
-            const existingIds = new Set(existingMessages.map(m => m.id));
-            const newMessages = formattedMessages.filter(msg => !existingIds.has(msg.id));
+            // Deduplicate by ID and sort by timestamp
+            const deduped = Array.from(
+              new Map(formattedMessages.map((m) => [m.id, m])).values()
+            ).sort((a, b) => a.timestamp - b.timestamp);
 
-            if (newMessages.length > 0) {
-              const allMessages = [...formattedMessages, ...newMessages]
-                .sort((a, b) => a.timestamp - b.timestamp);
-              const deduped = Array.from(new Map(allMessages.map(m => [m.id, m])).values());
-
-              // Save to IndexedDB
-              if (dbInitialized) {
-                Promise.all(
-                  deduped.map(msg =>
-                    indexedDBService.saveMessageToIndexedDB({
-                      id: msg.id,
-                      sender: msg.sender,
-                      channel: currentChannel,
-                      content: msg.content,
-                      timestamp: msg.timestamp,
-                      type: 'message',
-                    })
-                  )
-                ).catch(err => console.error('Error caching messages to IndexedDB:', err));
-              }
-
-              // Update state
-              setTimeout(() => {
-                setChannelMessages(currentChannel, deduped);
-                console.log(`✅ Loaded ${deduped.length} messages from PostgreSQL for ${currentChannel}`);
-              }, 0);
+            // Save to IndexedDB
+            if (dbInitialized) {
+              Promise.all(
+                deduped.map(msg =>
+                  indexedDBService.saveMessageToIndexedDB({
+                    id: msg.id,
+                    sender: msg.sender,
+                    channel: currentChannel,
+                    content: msg.content,
+                    timestamp: msg.timestamp,
+                    type: 'message',
+                  })
+                )
+              ).catch(err => console.error('Error caching messages to IndexedDB:', err));
             }
+
+            // Update state
+            setTimeout(() => {
+              setChannelMessages(currentChannel, deduped);
+              console.log(`✅ Loaded ${deduped.length} messages from PostgreSQL for ${currentChannel}`);
+            }, 0);
           }
         } catch (error) {
           console.error('Error loading messages from PostgreSQL:', error);
@@ -363,7 +345,7 @@ function App() {
 
       loadPostgresMessages();
     }
-  }, [currentChannel, postgresConnected, wsConnected, userId, dbInitialized, setChannelMessages, messages]);
+  }, [currentChannel, postgresConnected, wsConnected, userId, dbInitialized, setChannelMessages]);
 
   // Auto-join default channel when connected
   useEffect(() => {

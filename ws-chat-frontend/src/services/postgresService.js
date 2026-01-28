@@ -100,6 +100,10 @@ export const getChannelMessagesFromPostgres = async (channelId, limit = 50) => {
 
     if (response.ok) {
       const data = await response.json();
+      if (!data || !Array.isArray(data.messages)) {
+        console.warn('⚠️ Unexpected response shape when loading channel messages', data);
+        return [];
+      }
       console.log(`✅ Loaded ${data.messages.length} messages for channel ${channelId}`);
       return data.messages || [];
     } else {
@@ -122,6 +126,10 @@ export const getDMMessagesFromPostgres = async (userId1, userId2, limit = 50) =>
 
     if (response.ok) {
       const data = await response.json();
+      if (!data || !Array.isArray(data.messages)) {
+        console.warn('⚠️ Unexpected response shape when loading DM messages', data);
+        return [];
+      }
       console.log(`✅ Loaded ${data.messages.length} DM messages between ${userId1} and ${userId2}`);
       return data.messages || [];
     } else {
@@ -144,6 +152,10 @@ export const getAllMessagesForUser = async (userId) => {
 
     if (response.ok) {
       const data = await response.json();
+      if (!data || !Array.isArray(data.messages)) {
+        console.warn('⚠️ Unexpected response shape when loading user messages', data);
+        return [];
+      }
       console.log(`✅ Loaded ${data.messages.length} messages for user ${userId}`);
       return data.messages || [];
     } else {

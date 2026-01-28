@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -132,6 +134,303 @@ func setupRoutes(server *Server) {
 
 	// All message storage and retrieval now handled client-side with IndexedDB
 	// Server only handles WebSocket connections and real-time messaging
+	// These API routes allow the frontend to persist data to PostgreSQL
+
+	// Initialize database schema
+	http.HandleFunc("/api/db/init", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if globalDB != nil {
+			if err := globalDB.InitSchema(); err != nil {
+				http.Error(w, fmt.Sprintf("Failed to initialize schema: %v", err), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"status": "initialized"}`)
+		} else {
+			http.Error(w, "Database not available", http.StatusServiceUnavailable)
+		}
+	})
+
+	// Database health check
+	http.HandleFunc("/api/db/health", func(w http.ResponseWriter, r *http.Request) {
+		if globalDB != nil {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"status": "connected"}`)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprint(w, `{"status": "disconnected"}`)
+		}
+	})
+
+	// Save message to database
+	http.HandleFunc("/api/db/messages", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+
+			var msg map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+				http.Error(w, "Invalid message format", http.StatusBadRequest)
+				return
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			id, _ := msg["id"].(string)
+			sender, _ := msg["sender"].(string)
+			channel, _ := msg["channel"].(string)
+			content, _ := msg["content"].(string)
+			msgType, _ := msg["type"].(string)
+			timestamp, _ := msg["timestamp"].(float64)
+			recipientVal := msg["recipient"]
+			var recipient *string
+			if recipientVal != nil {
+				if r, ok := recipientVal.(string); ok {
+					recipient = &r
+				}
+			}
+
+			if err := globalDB.SaveMessage(id, sender, channel, content, msgType, int64(timestamp), recipient); err != nil {
+				log.Printf("Error saving message: %v", err)
+				http.Error(w, "Failed to save message", http.StatusInternalServerError)
+				return
+			}
+
+			fmt.Fprint(w, `{"status": "saved", "id": "`+id+`"}`)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Save multiple messages
+	http.HandleFunc("/api/db/messages/batch", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+
+			var messages []map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&messages); err != nil {
+				http.Error(w, "Invalid messages format", http.StatusBadRequest)
+				return
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			count, err := globalDB.SaveMessages(messages)
+			if err != nil {
+				log.Printf("Error saving messages: %v", err)
+				http.Error(w, "Failed to save messages", http.StatusInternalServerError)
+				return
+			}
+
+			fmt.Fprintf(w, `{"status": "saved", "count": %d}`, count)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Get channel messages
+	http.HandleFunc("/api/db/messages/channel", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+
+			channel := r.URL.Query().Get("channel")
+			if channel == "" {
+				http.Error(w, "channel parameter required", http.StatusBadRequest)
+				return
+			}
+
+			limit := 50
+			if l := r.URL.Query().Get("limit"); l != "" {
+				if parsed, err := strconv.Atoi(l); err == nil {
+					limit = parsed
+				}
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			messages, err := globalDB.GetChannelMessages(channel, limit)
+			if err != nil {
+				log.Printf("Error loading channel messages: %v", err)
+				http.Error(w, "Failed to load messages", http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"messages": messages,
+				"count":    len(messages),
+			})
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Delete channel messages
+	http.HandleFunc("/api/db/messages/channel/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			channel := r.URL.Path[len("/api/db/messages/channel/"):]
+			if channel == "" {
+				http.Error(w, "channel parameter required", http.StatusBadRequest)
+				return
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			if err := globalDB.ClearChannel(channel); err != nil {
+				log.Printf("Error clearing channel: %v", err)
+				http.Error(w, "Failed to clear channel", http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"status": "cleared"}`)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Get DM messages
+	http.HandleFunc("/api/db/messages/dm", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+
+			user1 := r.URL.Query().Get("user1")
+			user2 := r.URL.Query().Get("user2")
+			if user1 == "" || user2 == "" {
+				http.Error(w, "user1 and user2 parameters required", http.StatusBadRequest)
+				return
+			}
+
+			limit := 50
+			if l := r.URL.Query().Get("limit"); l != "" {
+				if parsed, err := strconv.Atoi(l); err == nil {
+					limit = parsed
+				}
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			messages, err := globalDB.GetDMMessages(user1, user2, limit)
+			if err != nil {
+				log.Printf("Error loading DM messages: %v", err)
+				http.Error(w, "Failed to load messages", http.StatusInternalServerError)
+				return
+			}
+
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"messages": messages,
+				"count":    len(messages),
+			})
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Get user messages
+	http.HandleFunc("/api/db/messages/user", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+
+			userID := r.URL.Query().Get("user_id")
+			if userID == "" {
+				http.Error(w, "user_id parameter required", http.StatusBadRequest)
+				return
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			messages, err := globalDB.GetUserMessages(userID)
+			if err != nil {
+				log.Printf("Error loading user messages: %v", err)
+				http.Error(w, "Failed to load messages", http.StatusInternalServerError)
+				return
+			}
+
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"messages": messages,
+				"count":    len(messages),
+			})
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Get message count
+	http.HandleFunc("/api/db/messages/count", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+
+			channel := r.URL.Query().Get("channel")
+			if channel == "" {
+				http.Error(w, "channel parameter required", http.StatusBadRequest)
+				return
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			count, err := globalDB.GetMessageCount(channel)
+			if err != nil {
+				log.Printf("Error getting message count: %v", err)
+				http.Error(w, "Failed to get count", http.StatusInternalServerError)
+				return
+			}
+
+			fmt.Fprintf(w, `{"count": %d}`, count)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Delete message
+	http.HandleFunc("/api/db/messages/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			messageID := r.URL.Path[len("/api/db/messages/"):]
+			if messageID == "" {
+				http.Error(w, "message ID required", http.StatusBadRequest)
+				return
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			if err := globalDB.DeleteMessage(messageID); err != nil {
+				log.Printf("Error deleting message: %v", err)
+				http.Error(w, "Failed to delete message", http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"status": "deleted"}`)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	// Health check
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

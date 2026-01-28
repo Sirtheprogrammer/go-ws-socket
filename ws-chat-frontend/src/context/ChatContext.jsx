@@ -31,15 +31,21 @@ const chatReducer = (state, action) => {
     case 'SET_CURRENT_CHANNEL':
       return { ...state, currentChannel: action.payload };
 
-    case 'ADD_MESSAGE':
+    case 'ADD_MESSAGE': {
       const { channel, message } = action.payload;
+      const existingMessages = state.messages[channel] || [];
+      // Check for duplicates using current state (not stale closure)
+      if (existingMessages.some((m) => m.id === message.id)) {
+        return state; // Skip duplicate
+      }
       return {
         ...state,
         messages: {
           ...state.messages,
-          [channel]: [...(state.messages[channel] || []), message],
+          [channel]: [...existingMessages, message],
         },
       };
+    }
 
     case 'SET_CHANNEL_MESSAGES':
       const { channelId, messages: channelMessages } = action.payload;
