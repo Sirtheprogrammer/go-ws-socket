@@ -34,6 +34,12 @@ function App() {
 
   // Refs for managing typing indicators
   const typingTimeoutsRef = useRef({});
+  // Ref for accessing latest messages in effects without dependency loops
+  const messagesRef = useRef(messages);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // Initialize IndexedDB and PostgreSQL on app load
   useEffect(() => {
@@ -52,6 +58,13 @@ function App() {
         } catch (pgError) {
           console.warn('⚠️ PostgreSQL API connection failed, using IndexedDB only:', pgError.message);
           setPostgresConnected(false);
+        }
+
+        // Request browser notification permission
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission().then(permission => {
+            console.log(`🔔 Notification permission: ${permission}`);
+          });
         }
       } catch (error) {
         console.error('❌ Database initialization failed:', error);
@@ -140,6 +153,28 @@ function App() {
           // Reducer handles duplicate prevention
           addMessage(dmKey, msgData);
 
+          // Show notification for incoming DM
+          const messagePreview = (payload?.content || payload || '').substring(0, 50);
+          addNotification({
+            type: 'message',
+            title: `New DM from ${sender}`,
+            message: messagePreview + (messagePreview.length >= 50 ? '...' : ''),
+            duration: 5000,
+          });
+
+          // Browser notification if tab is not focused
+          if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification(`New message from ${sender}`, {
+              body: messagePreview,
+              icon: '/favicon.ico',
+            });
+          }
+
+          // The sender already saved this message to PostgreSQL, 
+          // but we should also cache it to IndexedDB with the correct recipient
+          // The actual recipient is the current user (who received the message)
+          const actualRecipient = message.recipient || userId;
+
           // Save to IndexedDB for local caching
           if (dbInitialized) {
             indexedDBService.saveMessageToIndexedDB({
@@ -149,11 +184,12 @@ function App() {
               content: payload?.content || payload,
               timestamp,
               type: message.type,
-              recipient: sender,
+              recipient: actualRecipient,
             }).catch(err => console.error('Error saving DM to IndexedDB:', err));
           }
 
           // Save to PostgreSQL for global storage
+          // Use the same recipient as in the original message
           if (postgresConnected) {
             postgresService.saveMessageToPostgres({
               id: message.id,
@@ -162,27 +198,30 @@ function App() {
               content: payload?.content || payload,
               timestamp,
               type: message.type,
-              recipient: sender,
+              recipient: actualRecipient,
             }).catch(err => console.error('Error saving DM to PostgreSQL:', err));
           }
         }
         break;
 
       case 'system:typing':
-        if (payload?.typing && channel) {
+        // For DMs, we construct the channel key from the sender
+        // For regular channels, we use the channel field directly
+        const typingChannel = channel || (sender ? `dm_${sender}` : null);
+        if (payload?.typing && typingChannel) {
           // Update typing users for this channel
           setTypingUsersState((prev) => {
-            const channelTyping = new Set(prev[channel] || []);
+            const channelTyping = new Set(prev[typingChannel] || []);
             channelTyping.add(sender);
 
             return {
               ...prev,
-              [channel]: channelTyping,
+              [typingChannel]: channelTyping,
             };
           });
 
           // Clear existing timeout for this user
-          const timeoutKey = `${channel}:${sender}`;
+          const timeoutKey = `${typingChannel}:${sender}`;
           if (typingTimeoutsRef.current[timeoutKey]) {
             clearTimeout(typingTimeoutsRef.current[timeoutKey]);
           }
@@ -190,12 +229,12 @@ function App() {
           // Set new timeout to clear typing indicator
           typingTimeoutsRef.current[timeoutKey] = setTimeout(() => {
             setTypingUsersState((prev) => {
-              const channelTyping = new Set(prev[channel] || []);
+              const channelTyping = new Set(prev[typingChannel] || []);
               channelTyping.delete(sender);
 
               return {
                 ...prev,
-                [channel]: channelTyping,
+                [typingChannel]: channelTyping,
               };
             });
             delete typingTimeoutsRef.current[timeoutKey];
@@ -311,9 +350,14 @@ function App() {
               type: 'message',
             }));
 
-            // Deduplicate by ID and sort by timestamp
+            // Get existing messages from ref to ensure we don't lose real-time messages
+            // that might not be in the DB yet or were just received
+            const existingMessages = messagesRef.current[currentChannel] || [];
+
+            // Combine and deduplicate
+            const allMessages = [...existingMessages, ...formattedMessages];
             const deduped = Array.from(
-              new Map(formattedMessages.map((m) => [m.id, m])).values()
+              new Map(allMessages.map((m) => [m.id, m])).values()
             ).sort((a, b) => a.timestamp - b.timestamp);
 
             // Save to IndexedDB

@@ -15,22 +15,26 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
       return;
     }
 
-    const msgType = channel.startsWith('dm_')
-      ? 'chat:private'
-      : 'chat:group';
-
+    const isDirectMessage = channel.startsWith('dm_');
+    const recipientId = isDirectMessage ? channel.replace('dm_', '') : null;
+    const msgType = isDirectMessage ? 'chat:private' : 'chat:group';
     const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const messageContent = message;
 
     const msg = {
       type: msgType,
       sender: userId,
-      channel: channel.startsWith('dm_') ? undefined : channel,
-      recipient: channel.startsWith('dm_') ? channel.replace('dm_', '') : undefined,
       payload: { content: messageContent },
       timestamp: Date.now(),
       id: messageId,
     };
+
+    // Add channel or recipient based on message type
+    if (isDirectMessage) {
+      msg.recipient = recipientId;
+    } else {
+      msg.channel = channel;
+    }
 
     // Save to IndexedDB immediately (local cache)
     try {
@@ -43,7 +47,7 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
         type: msgType,
         recipient: channel.startsWith('dm_') ? channel.replace('dm_', '') : undefined,
       });
-      
+
       // Also add to local state immediately
       addMessage(channel, {
         id: messageId,
@@ -78,10 +82,14 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
 
     if (!isTyping && settings.showTypingIndicators) {
       setIsTyping(true);
+      // For DMs, send typing indicator to the recipient directly
+      // For channels, broadcast to the channel
+      const isDirectMessage = channel.startsWith('dm_');
       onSendMessage({
         type: 'system:typing',
         sender: userId,
-        channel,
+        channel: isDirectMessage ? undefined : channel,
+        recipient: isDirectMessage ? channel.replace('dm_', '') : undefined,
         payload: { typing: true },
         timestamp: Date.now(),
       });
@@ -93,10 +101,12 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
     }
     typingTimeoutRef.current = setTimeout(() => {
       setIsTyping(false);
+      const isDirectMessage = channel.startsWith('dm_');
       onSendMessage({
         type: 'system:typing',
         sender: userId,
-        channel,
+        channel: isDirectMessage ? undefined : channel,
+        recipient: isDirectMessage ? channel.replace('dm_', '') : undefined,
         payload: { typing: false },
         timestamp: Date.now(),
       });
