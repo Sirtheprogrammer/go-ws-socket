@@ -28,7 +28,10 @@ function App() {
     addNotification,
   } = useChat();
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    // Default to closed on mobile (<= 768px), open on desktop
+    return typeof window !== 'undefined' ? window.innerWidth > 768 : true;
+  });
   const [typingUsersState, setTypingUsersState] = useState({});
   const [dbInitialized, setDbInitialized] = useState(false);
   const [postgresConnected, setPostgresConnected] = useState(false);
