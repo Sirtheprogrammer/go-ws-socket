@@ -4,7 +4,7 @@ import '../styles/MessageList.css';
 
 function MessageList({ messages, userId, onDeleteMessage }) {
   const messagesEndRef = useRef(null);
-  const { addNotification, setReplyingTo, currentChannel } = useChat();
+  const { addNotification, setReplyingTo, currentChannel, nickname: myNickname } = useChat();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -61,14 +61,15 @@ function MessageList({ messages, userId, onDeleteMessage }) {
         const isOwn = msg.sender === userId;
         const isGroupChat = !currentChannel?.startsWith('dm_');
         const replyToMessage = msg.replyTo ? findOriginalMessage(msg.replyTo.id) : null;
+        const displayName = msg.nickname || msg.sender;
 
         return (
           <div key={msg.id} className={`message-group ${isOwn ? 'own' : ''}`}>
             <div className="message-avatar">
-              {msg.sender.substring(0, 2).toUpperCase()}
+              {displayName.substring(0, 2).toUpperCase()}
             </div>
             <div className="message-content">
-              {!isOwn && <div className="message-sender">{msg.sender}</div>}
+              {!isOwn && <div className="message-sender">{displayName}</div>}
 
               <div className={`message-bubble ${isOwn ? 'own' : ''}`}>
                 {/* Reply Context - WhatsApp style inside bubble */}

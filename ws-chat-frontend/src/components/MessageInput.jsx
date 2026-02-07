@@ -9,7 +9,7 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
-  const { settings, addMessage, replyingTo, clearReplyingTo } = useChat();
+  const { settings, addMessage, replyingTo, clearReplyingTo, nickname } = useChat();
 
   // Focus input when replying
   useEffect(() => {
@@ -34,6 +34,7 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
       sender: userId,
       payload: {
         content: messageContent,
+        nickname: nickname || userId,
         ...(replyingTo && {
           replyTo: {
             id: replyingTo.id,
@@ -73,6 +74,7 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
       addMessage(channel, {
         id: messageId,
         sender: userId,
+        nickname: nickname || userId,
         content: messageContent,
         timestamp: Date.now(),
         type: 'message',

@@ -5,6 +5,7 @@ import '../styles/Sidebar.css';
 function Sidebar({ isOpen, onToggle, onSendMessage }) {
   const {
     userId,
+    nickname,
     channels,
     currentChannel,
     setCurrentChannel,
@@ -103,10 +104,10 @@ function Sidebar({ isOpen, onToggle, onSendMessage }) {
         {/* User Info */}
         <div className="user-section">
           <div className="user-card">
-            <div className="user-avatar">{userId?.substring(0, 2).toUpperCase()}</div>
+            <div className="user-avatar">{(nickname || userId)?.substring(0, 2).toUpperCase()}</div>
             <div className="user-info-content">
               <div className="user-label">You</div>
-              <div className="user-name">{userId?.substring(0, 12)}</div>
+              <div className="user-name">{nickname || userId?.substring(0, 12)}</div>
             </div>
           </div>
         </div>

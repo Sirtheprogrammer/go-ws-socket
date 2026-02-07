@@ -4,6 +4,8 @@ const ChatContext = createContext();
 
 const initialState = {
   userId: null,
+  nickname: null,
+  userNicknameMap: {}, // { [userId]: nickname } - built from incoming messages
   channels: ['general', 'random', 'announcements'],
   currentChannel: 'general',
   messages: {},
@@ -25,6 +27,18 @@ const chatReducer = (state, action) => {
   switch (action.type) {
     case 'SET_USER_ID':
       return { ...state, userId: action.payload };
+
+    case 'SET_NICKNAME':
+      return { ...state, nickname: action.payload };
+
+    case 'SET_USER_NICKNAME': {
+      const { userId: uid, nickname: nick } = action.payload;
+      if (!nick || nick === uid) return state; // skip if no real nickname
+      return {
+        ...state,
+        userNicknameMap: { ...state.userNicknameMap, [uid]: nick },
+      };
+    }
 
     case 'SET_CONNECTED':
       return { ...state, isConnected: action.payload };
@@ -136,6 +150,15 @@ export const ChatProvider = ({ children }) => {
     localStorage.setItem('userId', id);
   }, []);
 
+  const setNickname = useCallback((name) => {
+    dispatch({ type: 'SET_NICKNAME', payload: name });
+    if (name) localStorage.setItem('nickname', name);
+  }, []);
+
+  const setUserNickname = useCallback((userId, nickname) => {
+    dispatch({ type: 'SET_USER_NICKNAME', payload: { userId, nickname } });
+  }, []);
+
   const setConnected = useCallback((connected) => {
     dispatch({ type: 'SET_CONNECTED', payload: connected });
   }, []);
@@ -195,6 +218,8 @@ export const ChatProvider = ({ children }) => {
   const value = {
     ...state,
     setUserId,
+    setNickname,
+    setUserNickname,
     setConnected,
     setCurrentChannel,
     addMessage,

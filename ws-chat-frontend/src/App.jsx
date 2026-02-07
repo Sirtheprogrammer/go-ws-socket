@@ -13,6 +13,9 @@ function App() {
   const {
     userId,
     setUserId,
+    nickname,
+    setNickname,
+    setUserNickname,
     setConnected,
     isConnected,
     currentChannel,
@@ -35,15 +38,51 @@ function App() {
   const [typingUsersState, setTypingUsersState] = useState({});
   const [dbInitialized, setDbInitialized] = useState(false);
   const [postgresConnected, setPostgresConnected] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Refs for managing typing indicators
   const typingTimeoutsRef = useRef({});
   // Ref for accessing latest messages in effects without dependency loops
   const messagesRef = useRef(messages);
+  // Ref to track unread count for use in callbacks without stale closures
+  const unreadCountRef = useRef(0);
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // Helper to post unread count to parent window (for ChatWidget badge)
+  const postUnreadCount = useCallback((count) => {
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'chat-unread-count', count }, '*');
+    }
+  }, []);
+
+  // Increment unread count (called from message handler)
+  const incrementUnread = useCallback(() => {
+    const newCount = unreadCountRef.current + 1;
+    unreadCountRef.current = newCount;
+    setUnreadCount(newCount);
+    postUnreadCount(newCount);
+  }, [postUnreadCount]);
+
+  // Reset unread when page gains focus
+  useEffect(() => {
+    const handleFocus = () => {
+      unreadCountRef.current = 0;
+      setUnreadCount(0);
+      postUnreadCount(0);
+    };
+    const handleVisibility = () => {
+      if (!document.hidden) handleFocus();
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [postUnreadCount]);
 
   // Initialize IndexedDB and PostgreSQL on app load
   useEffect(() => {
@@ -90,14 +129,24 @@ function App() {
     }
   }, [currentChannel, typingUsersState, setTypingUsers]);
 
-  // Initialize user ID
+  // Initialize user ID and nickname from URL params or localStorage
   useEffect(() => {
     if (!userId) {
+      const params = new URLSearchParams(window.location.search);
+      const paramUserId = params.get('user_id');
+      const paramNickname = params.get('nickname');
+
       const saved = localStorage.getItem('userId');
-      const newUserId = saved || `user_${Math.random().toString(36).substr(2, 9)}`;
+      const newUserId = paramUserId || saved || `user_${Math.random().toString(36).substr(2, 9)}`;
       setUserId(newUserId);
+
+      const savedNickname = localStorage.getItem('nickname');
+      const resolvedNickname = paramNickname || savedNickname || null;
+      if (resolvedNickname) {
+        setNickname(resolvedNickname);
+      }
     }
-  }, [userId, setUserId]);
+  }, [userId, setUserId, setNickname]);
 
   // Memoize WebSocket message handler to prevent recreation
   const handleWebSocketMessage = useCallback((message) => {
@@ -107,16 +156,23 @@ function App() {
       case 'chat:group':
       case 'chat':
         if (channel) {
+          const msgNickname = payload?.nickname || sender;
           const msgData = {
             id: message.id,
             sender,
+            nickname: msgNickname,
             content: payload?.content || payload,
             timestamp,
             type: 'message',
             replyTo: payload?.replyTo || undefined,
           };
+          // Track sender's nickname for UserList display
+          if (payload?.nickname) setUserNickname(sender, payload.nickname);
           // Reducer handles duplicate prevention
           addMessage(channel, msgData);
+
+          // Increment unread count if the message is from someone else
+          if (sender !== userId) incrementUnread();
 
           // Save to IndexedDB for local caching
           if (dbInitialized) {
@@ -149,9 +205,12 @@ function App() {
         const dmKey = `dm_${sender}`;
         if (sender !== userId) {
           addDmUser(sender);
+          const senderNickname = payload?.nickname || sender;
+          if (payload?.nickname) setUserNickname(sender, payload.nickname);
           const msgData = {
             id: message.id,
             sender,
+            nickname: senderNickname,
             content: payload?.content || payload,
             timestamp,
             type: 'message',
@@ -160,18 +219,21 @@ function App() {
           // Reducer handles duplicate prevention
           addMessage(dmKey, msgData);
 
+          // Increment unread count for incoming DM
+          incrementUnread();
+
           // Show notification for incoming DM
           const messagePreview = (payload?.content || payload || '').substring(0, 50);
           addNotification({
             type: 'message',
-            title: `New DM from ${sender}`,
+            title: `New DM from ${senderNickname}`,
             message: messagePreview + (messagePreview.length >= 50 ? '...' : ''),
             duration: 5000,
           });
 
           // Browser notification if tab is not focused
           if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification(`New message from ${sender}`, {
+            new Notification(`New message from ${senderNickname}`, {
               body: messagePreview,
               icon: '/favicon.ico',
             });
@@ -300,7 +362,7 @@ function App() {
         addNotification({
           type: 'info',
           title: 'User Joined',
-          message: `${sender} joined #${channel}`,
+          message: `${payload?.nickname || sender} joined #${channel}`,
           duration: 3000,
         });
         break;
@@ -309,7 +371,7 @@ function App() {
         addNotification({
           type: 'info',
           title: 'User Left',
-          message: `${sender} left #${channel}`,
+          message: `${payload?.nickname || sender} left #${channel}`,
           duration: 3000,
         });
         break;
@@ -339,7 +401,7 @@ function App() {
       default:
         console.log('Unknown message type:', type);
     }
-  }, [userId, addMessage, removeMessage, addDmUser, addNotification, updateActiveUsers, setTypingUsers, setChannelMessages, dbInitialized, postgresConnected]);
+  }, [userId, addMessage, removeMessage, addDmUser, addNotification, updateActiveUsers, setTypingUsers, setChannelMessages, setUserNickname, incrementUnread, dbInitialized, postgresConnected]);
 
   const { send, isConnected: wsConnected } = useWebSocket(
     userId,
@@ -448,12 +510,12 @@ function App() {
         type: 'system:presence',
         sender: userId,
         channel: 'general',
-        payload: { action: 'join' },
+        payload: { action: 'join', nickname: nickname || userId },
         timestamp: Date.now(),
       };
       send(joinMsg);
     }
-  }, [wsConnected, userId, send]);
+  }, [wsConnected, userId, nickname, send]);
 
   return (
     <div className={`app ${isDarkTheme ? 'dark-theme' : ''}`}>
