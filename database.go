@@ -62,6 +62,15 @@ func (db *Database) InitSchema() error {
 		ALTER TABLE messages ADD COLUMN IF NOT EXISTS nickname TEXT;
 	EXCEPTION WHEN duplicate_column THEN NULL;
 	END $$;
+
+	-- Read status table: tracks the last-read timestamp per user per channel
+	CREATE TABLE IF NOT EXISTS read_status (
+		user_id TEXT NOT NULL,
+		channel TEXT NOT NULL,
+		last_read_timestamp BIGINT NOT NULL DEFAULT 0,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		PRIMARY KEY (user_id, channel)
+	);
 	`
 
 	_, err := db.conn.Exec(createTableSQL)
@@ -287,6 +296,95 @@ func (db *Database) ClearChannel(channel string) error {
 	query := `DELETE FROM messages WHERE channel = $1`
 	_, err := db.conn.Exec(query, channel)
 	return err
+}
+
+// SaveReadStatus upserts the last-read timestamp for a user in a channel
+func (db *Database) SaveReadStatus(userID, channel string, lastReadTimestamp int64) error {
+	query := `
+	INSERT INTO read_status (user_id, channel, last_read_timestamp, updated_at)
+	VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+	ON CONFLICT (user_id, channel) DO UPDATE
+		SET last_read_timestamp = EXCLUDED.last_read_timestamp,
+		    updated_at = CURRENT_TIMESTAMP
+	`
+	_, err := db.conn.Exec(query, userID, channel, lastReadTimestamp)
+	return err
+}
+
+// GetReadStatus returns the last-read timestamp for a user in a channel
+func (db *Database) GetReadStatus(userID, channel string) (int64, error) {
+	var ts int64
+	query := `SELECT last_read_timestamp FROM read_status WHERE user_id = $1 AND channel = $2`
+	err := db.conn.QueryRow(query, userID, channel).Scan(&ts)
+	if err != nil {
+		return 0, err // returns 0 if no row (user never read this channel)
+	}
+	return ts, nil
+}
+
+// GetAllReadStatus returns all read statuses for a user (all channels)
+func (db *Database) GetAllReadStatus(userID string) (map[string]int64, error) {
+	query := `SELECT channel, last_read_timestamp FROM read_status WHERE user_id = $1`
+	rows, err := db.conn.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]int64)
+	for rows.Next() {
+		var channel string
+		var ts int64
+		if err := rows.Scan(&channel, &ts); err != nil {
+			return nil, err
+		}
+		result[channel] = ts
+	}
+	return result, rows.Err()
+}
+
+// GetUnreadCounts returns unread message counts per channel for a user
+func (db *Database) GetUnreadCounts(userID string) (map[string]int, error) {
+	// For each channel/DM, count messages newer than the user's last-read timestamp
+	// Messages sent by the user themselves are excluded
+	query := `
+	SELECT m.channel, COUNT(*) as unread
+	FROM messages m
+	LEFT JOIN read_status rs ON rs.user_id = $1 AND rs.channel = m.channel
+	WHERE m.sender != $1
+	  AND m.timestamp > COALESCE(rs.last_read_timestamp, 0)
+	GROUP BY m.channel
+	`
+	rows, err := db.conn.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]int)
+	for rows.Next() {
+		var channel string
+		var count int
+		if err := rows.Scan(&channel, &count); err != nil {
+			return nil, err
+		}
+		result[channel] = count
+	}
+	return result, rows.Err()
+}
+
+// GetTotalUnreadCount returns the total unread message count across all channels for a user
+func (db *Database) GetTotalUnreadCount(userID string) (int, error) {
+	query := `
+	SELECT COUNT(*) as total_unread
+	FROM messages m
+	LEFT JOIN read_status rs ON rs.user_id = $1 AND rs.channel = m.channel
+	WHERE m.sender != $1
+	  AND m.timestamp > COALESCE(rs.last_read_timestamp, 0)
+	`
+	var count int
+	err := db.conn.QueryRow(query, userID).Scan(&count)
+	return count, err
 }
 
 // Close closes the database connection

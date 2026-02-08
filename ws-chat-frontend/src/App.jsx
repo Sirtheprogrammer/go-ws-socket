@@ -58,7 +58,7 @@ function App() {
     }
   }, []);
 
-  // Increment unread count (called from message handler)
+  // Increment unread count (called from message handler for real-time msgs)
   const incrementUnread = useCallback(() => {
     const newCount = unreadCountRef.current + 1;
     unreadCountRef.current = newCount;
@@ -66,12 +66,32 @@ function App() {
     postUnreadCount(newCount);
   }, [postUnreadCount]);
 
-  // Reset unread when page gains focus
+  // Mark the current channel as read and refresh the total unread from DB
+  const markChannelAsRead = useCallback(async () => {
+    if (!userId || !currentChannel) return;
+    try {
+      await postgresService.saveReadStatus(userId, currentChannel, Date.now());
+      // Refresh total unread from the backend
+      const { total } = await postgresService.getUnreadCounts(userId);
+      unreadCountRef.current = total;
+      setUnreadCount(total);
+      postUnreadCount(total);
+    } catch (err) {
+      console.error('Error marking channel as read:', err);
+    }
+  }, [userId, currentChannel, postUnreadCount]);
+
+  // When current channel changes, mark it as read
+  useEffect(() => {
+    if (userId && currentChannel && postgresConnected) {
+      markChannelAsRead();
+    }
+  }, [currentChannel, userId, postgresConnected, markChannelAsRead]);
+
+  // When page gains focus, mark current channel as read
   useEffect(() => {
     const handleFocus = () => {
-      unreadCountRef.current = 0;
-      setUnreadCount(0);
-      postUnreadCount(0);
+      markChannelAsRead();
     };
     const handleVisibility = () => {
       if (!document.hidden) handleFocus();
@@ -82,7 +102,19 @@ function App() {
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [postUnreadCount]);
+  }, [markChannelAsRead]);
+
+  // Fetch persistent unread count when both userId and PostgreSQL are ready
+  useEffect(() => {
+    if (userId && postgresConnected) {
+      postgresService.getUnreadCounts(userId).then(({ total }) => {
+        unreadCountRef.current = total;
+        setUnreadCount(total);
+        postUnreadCount(total);
+        console.log(`📬 Persistent unread count: ${total}`);
+      }).catch(err => console.error('Error fetching initial unread count:', err));
+    }
+  }, [userId, postgresConnected, postUnreadCount]);
 
   // Initialize IndexedDB and PostgreSQL on app load
   useEffect(() => {

@@ -440,6 +440,106 @@ func setupRoutes(server *Server) {
 		}
 	})
 
+	// Save read status (mark channel as read)
+	http.HandleFunc("/api/db/read-status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.Method == http.MethodPost {
+			var body map[string]interface{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, "Invalid request body", http.StatusBadRequest)
+				return
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			userID, _ := body["user_id"].(string)
+			channel, _ := body["channel"].(string)
+			timestamp, _ := body["timestamp"].(float64)
+
+			if userID == "" || channel == "" {
+				http.Error(w, "user_id and channel are required", http.StatusBadRequest)
+				return
+			}
+
+			if err := globalDB.SaveReadStatus(userID, channel, int64(timestamp)); err != nil {
+				log.Printf("Error saving read status: %v", err)
+				http.Error(w, "Failed to save read status", http.StatusInternalServerError)
+				return
+			}
+
+			fmt.Fprint(w, `{"status": "saved"}`)
+
+		} else if r.Method == http.MethodGet {
+			// Get all read statuses for a user
+			userID := r.URL.Query().Get("user_id")
+			if userID == "" {
+				http.Error(w, "user_id is required", http.StatusBadRequest)
+				return
+			}
+
+			if globalDB == nil {
+				http.Error(w, "Database not available", http.StatusServiceUnavailable)
+				return
+			}
+
+			statuses, err := globalDB.GetAllReadStatus(userID)
+			if err != nil {
+				log.Printf("Error getting read status: %v", err)
+				http.Error(w, "Failed to get read status", http.StatusInternalServerError)
+				return
+			}
+
+			jsonData, _ := json.Marshal(map[string]interface{}{"statuses": statuses})
+			w.Write(jsonData)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Get unread counts for a user
+	http.HandleFunc("/api/db/unread-counts", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		userID := r.URL.Query().Get("user_id")
+		if userID == "" {
+			http.Error(w, "user_id is required", http.StatusBadRequest)
+			return
+		}
+
+		if globalDB == nil {
+			http.Error(w, "Database not available", http.StatusServiceUnavailable)
+			return
+		}
+
+		counts, err := globalDB.GetUnreadCounts(userID)
+		if err != nil {
+			log.Printf("Error getting unread counts: %v", err)
+			http.Error(w, "Failed to get unread counts", http.StatusInternalServerError)
+			return
+		}
+
+		totalCount, err := globalDB.GetTotalUnreadCount(userID)
+		if err != nil {
+			log.Printf("Error getting total unread count: %v", err)
+			totalCount = 0
+		}
+
+		jsonData, _ := json.Marshal(map[string]interface{}{
+			"counts": counts,
+			"total":  totalCount,
+		})
+		w.Write(jsonData)
+	})
+
 	// Health check
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

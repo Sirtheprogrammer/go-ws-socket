@@ -249,6 +249,51 @@ export const isPostgresConnected = async () => {
   }
 };
 
+// Save read status (mark a channel as read up to a timestamp)
+export const saveReadStatus = async (userId, channel, timestamp) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/db/read-status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, channel, timestamp }),
+    });
+
+    if (response.ok) {
+      return true;
+    } else {
+      console.warn(`⚠️ Failed to save read status: ${response.status}`);
+      return false;
+    }
+  } catch (error) {
+    console.error('Error saving read status:', error);
+    return false;
+  }
+};
+
+// Get unread counts for a user across all channels
+export const getUnreadCounts = async (userId) => {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/db/unread-counts?user_id=${encodeURIComponent(userId)}`,
+      { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        counts: data.counts || {},
+        total: data.total || 0,
+      };
+    } else {
+      console.warn(`⚠️ Failed to get unread counts: ${response.status}`);
+      return { counts: {}, total: 0 };
+    }
+  } catch (error) {
+    console.error('Error getting unread counts:', error);
+    return { counts: {}, total: 0 };
+  }
+};
+
 export default {
   initPostgres,
   saveMessageToPostgres,
@@ -260,4 +305,6 @@ export default {
   deleteMessageFromPostgres,
   clearChannelMessagesFromPostgres,
   isPostgresConnected,
+  saveReadStatus,
+  getUnreadCounts,
 };
