@@ -14,6 +14,7 @@ function ChatWindow({ onSendMessage, onDeleteMessage }) {
     activeUsers,
     isConnected,
     typingUsers,
+    userNicknameMap,
   } = useChat();
 
   const [showUserList, setShowUserList] = useState(false);
@@ -21,8 +22,9 @@ function ChatWindow({ onSendMessage, onDeleteMessage }) {
 
   const channelMessages = messages[currentChannel] || [];
   const isDirectMessage = currentChannel.startsWith('dm_');
+  const dmUserId = isDirectMessage ? currentChannel.replace('dm_', '') : null;
   const displayName = isDirectMessage
-    ? `@${currentChannel.replace('dm_', '')}`
+    ? `@${userNicknameMap[dmUserId] || dmUserId}`
     : `#${currentChannel}`;
 
   const filteredMessages = searchQuery

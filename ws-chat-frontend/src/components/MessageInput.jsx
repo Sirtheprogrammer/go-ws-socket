@@ -9,7 +9,7 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
-  const { settings, addMessage, replyingTo, clearReplyingTo, nickname } = useChat();
+  const { settings, addMessage, replyingTo, clearReplyingTo, nickname, userNicknameMap } = useChat();
 
   // Focus input when replying
   useEffect(() => {
@@ -57,6 +57,7 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
       const messageData = {
         id: messageId,
         sender: userId,
+        nickname: nickname || userId,
         channel: channel,
         content: messageContent,
         timestamp: Date.now(),
@@ -147,7 +148,7 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
           <div className="reply-preview-content">
             <span className="reply-preview-icon">↩</span>
             <span className="reply-preview-label">Replying to</span>
-            <span className="reply-preview-sender">{replyingTo.sender}</span>
+            <span className="reply-preview-sender">{userNicknameMap[replyingTo.sender] || replyingTo.sender}</span>
             <span className="reply-preview-text">
               {replyingTo.content?.substring(0, 60)}{replyingTo.content?.length > 60 ? '...' : ''}
             </span>
@@ -164,7 +165,7 @@ function MessageInput({ channel, userId, onSendMessage, isConnected }) {
           value={message}
           onChange={handleInputChange}
           onKeyPress={handleKeyPress}
-          placeholder={replyingTo ? `Reply to ${replyingTo.sender}...` : (isConnected ? 'Type a message...' : 'Connecting...')}
+          placeholder={replyingTo ? `Reply to ${userNicknameMap[replyingTo.sender] || replyingTo.sender}...` : (isConnected ? 'Type a message...' : 'Connecting...')}
           disabled={!isConnected}
           rows="1"
           className="input-field"

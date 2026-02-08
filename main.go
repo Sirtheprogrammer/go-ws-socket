@@ -196,8 +196,15 @@ func setupRoutes(server *Server) {
 					recipient = &r
 				}
 			}
+			nicknameVal := msg["nickname"]
+			var nickname *string
+			if nicknameVal != nil {
+				if n, ok := nicknameVal.(string); ok {
+					nickname = &n
+				}
+			}
 
-			if err := globalDB.SaveMessage(id, sender, channel, content, msgType, int64(timestamp), recipient); err != nil {
+			if err := globalDB.SaveMessage(id, sender, channel, content, msgType, int64(timestamp), recipient, nickname); err != nil {
 				log.Printf("Error saving message: %v", err)
 				http.Error(w, "Failed to save message", http.StatusInternalServerError)
 				return

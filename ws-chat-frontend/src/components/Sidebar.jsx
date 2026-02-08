@@ -6,6 +6,7 @@ function Sidebar({ isOpen, onToggle, onSendMessage }) {
   const {
     userId,
     nickname,
+    userNicknameMap,
     channels,
     currentChannel,
     setCurrentChannel,
@@ -179,17 +180,20 @@ function Sidebar({ isOpen, onToggle, onSendMessage }) {
             {dmUsers.length === 0 ? (
               <div className="empty-state">No conversations yet</div>
             ) : (
-              dmUsers.map((user) => (
-                <button
-                  key={user}
-                  className={`dm-item ${currentChannel === `dm_${user}` ? 'active' : ''}`}
-                  onClick={() => setCurrentChannel(`dm_${user}`)}
-                  title={user}
-                >
-                  <span className="dm-avatar">{user.substring(0, 1).toUpperCase()}</span>
-                  <span className="dm-name">{user}</span>
-                </button>
-              ))
+              dmUsers.map((user) => {
+                const dmDisplayName = userNicknameMap[user] || user;
+                return (
+                  <button
+                    key={user}
+                    className={`dm-item ${currentChannel === `dm_${user}` ? 'active' : ''}`}
+                    onClick={() => setCurrentChannel(`dm_${user}`)}
+                    title={dmDisplayName}
+                  >
+                    <span className="dm-avatar">{dmDisplayName.substring(0, 1).toUpperCase()}</span>
+                    <span className="dm-name">{dmDisplayName}</span>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>

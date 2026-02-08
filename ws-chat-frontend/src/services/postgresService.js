@@ -36,6 +36,7 @@ export const saveMessageToPostgres = async (message) => {
       body: JSON.stringify({
         id: message.id,
         sender: message.sender,
+        nickname: message.nickname || null,
         channel: message.channel || message.recipient || 'general',
         content: message.content || message.payload || '',
         type: message.type || 'chat',
@@ -67,6 +68,7 @@ export const saveMessagesToPostgres = async (messages) => {
         messages.map((msg) => ({
           id: msg.id,
           sender: msg.sender,
+          nickname: msg.nickname || null,
           channel: msg.channel || msg.recipient || 'general',
           content: msg.content || msg.payload || '',
           type: msg.type || 'chat',

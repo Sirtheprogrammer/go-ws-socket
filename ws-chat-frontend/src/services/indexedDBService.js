@@ -54,6 +54,7 @@ export const saveMessageToIndexedDB = async (message) => {
     const request = store.put({
       id: message.id,
       sender: message.sender,
+      nickname: message.nickname || null,
       channel: message.channel || message.recipient,
       content: message.content || message.payload,
       timestamp: message.timestamp,

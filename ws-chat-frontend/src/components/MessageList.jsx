@@ -4,7 +4,7 @@ import '../styles/MessageList.css';
 
 function MessageList({ messages, userId, onDeleteMessage }) {
   const messagesEndRef = useRef(null);
-  const { addNotification, setReplyingTo, currentChannel, nickname: myNickname } = useChat();
+  const { addNotification, setReplyingTo, currentChannel, nickname: myNickname, userNicknameMap } = useChat();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -75,7 +75,7 @@ function MessageList({ messages, userId, onDeleteMessage }) {
                 {/* Reply Context - WhatsApp style inside bubble */}
                 {msg.replyTo && (
                   <div className="reply-context">
-                    <span className="reply-sender">{msg.replyTo.sender}</span>
+                    <span className="reply-sender">{userNicknameMap[msg.replyTo.sender] || msg.replyTo.sender}</span>
                     <span className="reply-preview">{msg.replyTo.content?.substring(0, 60)}{msg.replyTo.content?.length > 60 ? '...' : ''}</span>
                   </div>
                 )}

@@ -48,6 +48,7 @@ func (db *Database) InitSchema() error {
 		type TEXT NOT NULL DEFAULT 'chat',
 		timestamp BIGINT NOT NULL,
 		recipient TEXT,
+		nickname TEXT,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
@@ -55,6 +56,12 @@ func (db *Database) InitSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
 	CREATE INDEX IF NOT EXISTS idx_messages_channel_timestamp ON messages(channel, timestamp);
 	CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient);
+
+	-- Add nickname column to existing tables that lack it
+	DO $$ BEGIN
+		ALTER TABLE messages ADD COLUMN IF NOT EXISTS nickname TEXT;
+	EXCEPTION WHEN duplicate_column THEN NULL;
+	END $$;
 	`
 
 	_, err := db.conn.Exec(createTableSQL)
@@ -62,13 +69,13 @@ func (db *Database) InitSchema() error {
 }
 
 // SaveMessage saves a message to the database
-func (db *Database) SaveMessage(id, sender, channel, content, msgType string, timestamp int64, recipient *string) error {
+func (db *Database) SaveMessage(id, sender, channel, content, msgType string, timestamp int64, recipient *string, nickname *string) error {
 	query := `
-	INSERT INTO messages (id, sender, channel, content, type, timestamp, recipient)
-	VALUES ($1, $2, $3, $4, $5, $6, $7)
+	INSERT INTO messages (id, sender, channel, content, type, timestamp, recipient, nickname)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	ON CONFLICT (id) DO NOTHING
 	`
-	_, err := db.conn.Exec(query, id, sender, channel, content, msgType, timestamp, recipient)
+	_, err := db.conn.Exec(query, id, sender, channel, content, msgType, timestamp, recipient, nickname)
 	return err
 }
 
@@ -87,8 +94,8 @@ func (db *Database) SaveMessages(messages []map[string]interface{}) (int, error)
 	inserted := 0
 	for _, msg := range messages {
 		query := `
-		INSERT INTO messages (id, sender, channel, content, type, timestamp, recipient)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO messages (id, sender, channel, content, type, timestamp, recipient, nickname)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (id) DO NOTHING
 		`
 		result, err := tx.Exec(query,
@@ -99,6 +106,7 @@ func (db *Database) SaveMessages(messages []map[string]interface{}) (int, error)
 			msg["type"],
 			msg["timestamp"],
 			msg["recipient"],
+			msg["nickname"],
 		)
 		if err != nil {
 			return 0, err
@@ -121,7 +129,7 @@ func (db *Database) SaveMessages(messages []map[string]interface{}) (int, error)
 // GetChannelMessages retrieves messages for a channel
 func (db *Database) GetChannelMessages(channel string, limit int) ([]map[string]interface{}, error) {
 	query := `
-	SELECT id, sender, channel, content, type, timestamp, recipient
+	SELECT id, sender, channel, content, type, timestamp, recipient, nickname
 	FROM messages
 	WHERE channel = $1
 	ORDER BY timestamp ASC
@@ -143,9 +151,9 @@ func (db *Database) GetChannelMessages(channel string, limit int) ([]map[string]
 	for rows.Next() {
 		var id, sender, ch, content, msgType string
 		var timestamp int64
-		var recipient *string
+		var recipient, nickname *string
 
-		if err := rows.Scan(&id, &sender, &ch, &content, &msgType, &timestamp, &recipient); err != nil {
+		if err := rows.Scan(&id, &sender, &ch, &content, &msgType, &timestamp, &recipient, &nickname); err != nil {
 			return nil, err
 		}
 
@@ -157,6 +165,7 @@ func (db *Database) GetChannelMessages(channel string, limit int) ([]map[string]
 			"type":      msgType,
 			"timestamp": timestamp,
 			"recipient": recipient,
+			"nickname":  nickname,
 		}
 		messages = append(messages, msg)
 	}
@@ -167,7 +176,7 @@ func (db *Database) GetChannelMessages(channel string, limit int) ([]map[string]
 // GetDMMessages retrieves direct messages between two users
 func (db *Database) GetDMMessages(userId1, userId2 string, limit int) ([]map[string]interface{}, error) {
 	query := `
-	SELECT id, sender, channel, content, type, timestamp, recipient
+	SELECT id, sender, channel, content, type, timestamp, recipient, nickname
 	FROM messages
 	WHERE (
 		(sender = $1 AND recipient = $2)
@@ -195,9 +204,9 @@ func (db *Database) GetDMMessages(userId1, userId2 string, limit int) ([]map[str
 	for rows.Next() {
 		var id, sender, ch, content, msgType string
 		var timestamp int64
-		var recipient *string
+		var recipient, nickname *string
 
-		if err := rows.Scan(&id, &sender, &ch, &content, &msgType, &timestamp, &recipient); err != nil {
+		if err := rows.Scan(&id, &sender, &ch, &content, &msgType, &timestamp, &recipient, &nickname); err != nil {
 			return nil, err
 		}
 
@@ -209,6 +218,7 @@ func (db *Database) GetDMMessages(userId1, userId2 string, limit int) ([]map[str
 			"type":      msgType,
 			"timestamp": timestamp,
 			"recipient": recipient,
+			"nickname":  nickname,
 		}
 		messages = append(messages, msg)
 	}
@@ -219,7 +229,7 @@ func (db *Database) GetDMMessages(userId1, userId2 string, limit int) ([]map[str
 // GetUserMessages retrieves all messages for a user
 func (db *Database) GetUserMessages(userId string) ([]map[string]interface{}, error) {
 	query := `
-	SELECT id, sender, channel, content, type, timestamp, recipient
+	SELECT id, sender, channel, content, type, timestamp, recipient, nickname
 	FROM messages
 	WHERE sender = $1 OR recipient = $1
 	ORDER BY timestamp ASC
@@ -235,9 +245,9 @@ func (db *Database) GetUserMessages(userId string) ([]map[string]interface{}, er
 	for rows.Next() {
 		var id, sender, ch, content, msgType string
 		var timestamp int64
-		var recipient *string
+		var recipient, nickname *string
 
-		if err := rows.Scan(&id, &sender, &ch, &content, &msgType, &timestamp, &recipient); err != nil {
+		if err := rows.Scan(&id, &sender, &ch, &content, &msgType, &timestamp, &recipient, &nickname); err != nil {
 			return nil, err
 		}
 
@@ -249,6 +259,7 @@ func (db *Database) GetUserMessages(userId string) ([]map[string]interface{}, er
 			"type":      msgType,
 			"timestamp": timestamp,
 			"recipient": recipient,
+			"nickname":  nickname,
 		}
 		messages = append(messages, msg)
 	}

@@ -179,6 +179,7 @@ function App() {
             indexedDBService.saveMessageToIndexedDB({
               id: message.id,
               sender,
+              nickname: msgNickname,
               channel,
               content: payload?.content || payload,
               timestamp,
@@ -192,6 +193,7 @@ function App() {
             postgresService.saveMessageToPostgres({
               id: message.id,
               sender,
+              nickname: msgNickname,
               channel,
               content: payload?.content || payload,
               timestamp,
@@ -249,6 +251,7 @@ function App() {
             indexedDBService.saveMessageToIndexedDB({
               id: message.id,
               sender,
+              nickname: senderNickname,
               channel: dmKey,
               content: payload?.content || payload,
               timestamp,
@@ -263,6 +266,7 @@ function App() {
             postgresService.saveMessageToPostgres({
               id: message.id,
               sender,
+              nickname: senderNickname,
               channel: dmKey,
               content: payload?.content || payload,
               timestamp,
@@ -324,10 +328,18 @@ function App() {
           const historyMessages = payload.messages.map((msg) => ({
             id: msg.id || msg.ID,
             sender: msg.sender || msg.Sender,
+            nickname: msg.nickname || msg.sender || msg.Sender,
             content: msg.content || msg.Payload || msg.payload,
             timestamp: msg.timestamp || msg.Timestamp,
             type: 'message',
           }));
+
+          // Build nickname map from history
+          historyMessages.forEach((msg) => {
+            if (msg.nickname && msg.nickname !== msg.sender) {
+              setUserNickname(msg.sender, msg.nickname);
+            }
+          });
 
           // Deduplicate by ID and sort by timestamp
           const deduped = Array.from(
@@ -341,6 +353,7 @@ function App() {
                 indexedDBService.saveMessageToIndexedDB({
                   id: msg.id,
                   sender: msg.sender,
+                  nickname: msg.nickname,
                   channel,
                   content: msg.content,
                   timestamp: msg.timestamp,
@@ -456,10 +469,18 @@ function App() {
             const formattedMessages = pgMessages.map((msg) => ({
               id: msg.id,
               sender: msg.sender,
+              nickname: msg.nickname || msg.sender,
               content: msg.content,
               timestamp: msg.timestamp,
               type: 'message',
             }));
+
+            // Build nickname map from loaded messages
+            formattedMessages.forEach((msg) => {
+              if (msg.nickname && msg.nickname !== msg.sender) {
+                setUserNickname(msg.sender, msg.nickname);
+              }
+            });
 
             // Get existing messages from ref to ensure we don't lose real-time messages
             // that might not be in the DB yet or were just received
@@ -478,6 +499,7 @@ function App() {
                   indexedDBService.saveMessageToIndexedDB({
                     id: msg.id,
                     sender: msg.sender,
+                    nickname: msg.nickname,
                     channel: currentChannel,
                     content: msg.content,
                     timestamp: msg.timestamp,
@@ -500,7 +522,7 @@ function App() {
 
       loadPostgresMessages();
     }
-  }, [currentChannel, postgresConnected, wsConnected, userId, dbInitialized, setChannelMessages]);
+  }, [currentChannel, postgresConnected, wsConnected, userId, dbInitialized, setChannelMessages, setUserNickname]);
 
   // Auto-join default channel when connected
   useEffect(() => {

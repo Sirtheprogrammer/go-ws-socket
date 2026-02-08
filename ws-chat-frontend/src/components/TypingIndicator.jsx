@@ -1,12 +1,20 @@
 import React from 'react';
+import { useChat } from '../context/ChatContext';
 import '../styles/TypingIndicator.css';
 
 function TypingIndicator({ typingUsers }) {
+  const { userNicknameMap, userId, nickname } = useChat();
+
   if (!typingUsers || typingUsers.size === 0) {
     return null;
   }
 
-  const typingUserList = Array.from(typingUsers);
+  const resolveDisplayName = (uid) => {
+    if (uid === userId && nickname) return nickname;
+    return userNicknameMap[uid] || uid;
+  };
+
+  const typingUserList = Array.from(typingUsers).map(resolveDisplayName);
   const typingText = typingUserList.length === 1
     ? `${typingUserList[0]} is typing`
     : `${typingUserList.join(', ')} are typing`;
